@@ -69,11 +69,15 @@ interface OrderFilledArgs {
   fee: bigint;
 }
 
+// Number of blocks to backfill on startup (~1 hour on Polygon with 2s blocks)
+const BACKFILL_BLOCKS = 300n;
+
 class PolymarketIndexer {
   private client: ReturnType<typeof createPublicClient> | null = null;
   private unwatch: (() => void) | null = null;
   private isRunning = false;
   private processedTxHashes: Set<string> = new Set();
+  private backfillComplete = false;
 
   async start() {
     const alchemyWsUrl = process.env.ALCHEMY_WS_URL;
@@ -102,7 +106,10 @@ class PolymarketIndexer {
         }),
       });
 
-      // Subscribe to OrderFilled events on the CTF Exchange
+      // Step 1: Backfill historical trades before subscribing to live events
+      await this.backfillHistoricalTrades();
+
+      // Step 2: Subscribe to OrderFilled events on the CTF Exchange for live trades
       this.unwatch = this.client.watchContractEvent({
         address: CTF_EXCHANGE_ADDRESS,
         abi: CTF_EXCHANGE_ABI,
@@ -123,6 +130,54 @@ class PolymarketIndexer {
     } catch (error) {
       console.error('[Polymarket] Failed to connect:', error);
       this.scheduleReconnect();
+    }
+  }
+
+  /**
+   * Backfill historical trades from the last ~1 hour of blocks
+   * This ensures we don't miss trades if the indexer was down
+   */
+  private async backfillHistoricalTrades(): Promise<void> {
+    if (!this.client) {
+      console.error('[Polymarket] Cannot backfill: client not initialized');
+      return;
+    }
+
+    try {
+      const currentBlock = await this.client.getBlockNumber();
+      const fromBlock = currentBlock - BACKFILL_BLOCKS;
+
+      console.log(`[Polymarket] 📜 Backfilling trades from block ${fromBlock} to ${currentBlock} (~${BACKFILL_BLOCKS} blocks)...`);
+
+      const logs = await this.client.getContractEvents({
+        address: CTF_EXCHANGE_ADDRESS,
+        abi: CTF_EXCHANGE_ABI,
+        eventName: 'OrderFilled',
+        fromBlock,
+        toBlock: currentBlock,
+      });
+
+      console.log(`[Polymarket] Found ${logs.length} historical trades to process`);
+
+      // Process each historical log
+      let processedCount = 0;
+      for (const log of logs) {
+        // Cast to the expected Log type for handleOrderFilled
+        await this.handleOrderFilled(log as unknown as Log<bigint, number, false>);
+        processedCount++;
+
+        // Log progress every 100 trades
+        if (processedCount % 100 === 0) {
+          console.log(`[Polymarket] Backfill progress: ${processedCount}/${logs.length} trades`);
+        }
+      }
+
+      this.backfillComplete = true;
+      console.log(`[Polymarket] ✅ Backfill complete: processed ${processedCount} historical trades`);
+    } catch (error) {
+      console.error('[Polymarket] Error during backfill:', error);
+      // Continue with live subscription even if backfill fails
+      this.backfillComplete = true;
     }
   }
 
