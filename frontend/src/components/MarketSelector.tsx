@@ -142,7 +142,7 @@ export function MarketSelector({
               onMarketChange('');
             }}
           >
-            📊 Kalshi
+            Kalshi
           </button>
           <button
             className={`toggle-btn ${exchange === 'polymarket' ? 'active' : ''}`}
@@ -151,7 +151,7 @@ export function MarketSelector({
               onMarketChange('');
             }}
           >
-            🔮 Polymarket
+            Polymarket
           </button>
         </div>
       </div>
@@ -162,15 +162,17 @@ export function MarketSelector({
           <label>Market</label>
           {!isLoading && markets.length > 0 && (
             <div className="sort-controls">
+              <span className="sort-label">Sort by:</span>
               <button
                 className={`sort-btn ${sortBy === 'tradesLast10Min' ? 'active' : ''}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   setSortBy('tradesLast10Min');
                 }}
-                title="Sort by trades in last 10 minutes"
+                title="Sort markets by trades in the last 10 minutes"
               >
-                🔥 Last 10min
+                {sortBy === 'tradesLast10Min' ? '✓ ' : ''}
+                10 min activity
               </button>
               <button
                 className={`sort-btn ${sortBy === 'tradeCount' ? 'active' : ''}`}
@@ -178,9 +180,10 @@ export function MarketSelector({
                   e.stopPropagation();
                   setSortBy('tradeCount');
                 }}
-                title="Sort by total trades"
+                title="Sort markets by total trades"
               >
-                📊 Total
+                {sortBy === 'tradeCount' ? '✓ ' : ''}
+                Total trades
               </button>
             </div>
           )}
@@ -199,7 +202,7 @@ export function MarketSelector({
           <span className="dropdown-arrow" onClick={() => !isLoading && setIsDropdownOpen(!isDropdownOpen)}>
             {isDropdownOpen ? '▲' : '▼'}
           </span>
-          
+
           {/* Loading spinner - show when loading (even if dropdown is open) */}
           {isLoading && (
             <div className="dropdown-list loading">
@@ -209,7 +212,7 @@ export function MarketSelector({
               </div>
             </div>
           )}
-          
+
           {/* Markets dropdown - show when loaded, dropdown is open, and we have markets */}
           {!isLoading && isDropdownOpen && markets.length > 0 && (
             <div className="dropdown-list">
