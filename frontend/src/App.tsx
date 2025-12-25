@@ -65,10 +65,8 @@ function App() {
             <div className="placeholder-icon">⚠️</div>
             <h2>Backend Not Available</h2>
             <p>
-              Make sure the backend server is running on{' '}
-              <code>http://localhost:3000</code>
+              Unable to connect to the backend service. Please try again later.
             </p>
-            <pre>cd backend && npm run dev</pre>
           </div>
         ) : !marketId ? (
           <div className="placeholder">
