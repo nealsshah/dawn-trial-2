@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import type { Exchange, Interval, Market } from '../types';
 import { fetchMarkets } from '../services/api';
 
@@ -21,10 +21,15 @@ export function MarketSelector({
 }: MarketSelectorProps) {
   const [markets, setMarkets] = useState<Market[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Fetch markets when exchange changes
   useEffect(() => {
     setIsLoading(true);
+    setSearchQuery('');
     fetchMarkets(exchange)
       .then((data) => {
         setMarkets(data);
@@ -40,6 +45,18 @@ export function MarketSelector({
       });
   }, [exchange]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Format market ID for display
   const formatMarketId = (id: string): string => {
     // Kalshi IDs are readable, Polymarket IDs are long numbers
@@ -47,6 +64,33 @@ export function MarketSelector({
       return `${id.slice(0, 8)}...${id.slice(-6)}`;
     }
     return id;
+  };
+
+  // Filter markets based on search query
+  const filteredMarkets = markets.filter((m) =>
+    m.marketId.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Get selected market display name
+  const selectedMarket = markets.find((m) => m.marketId === marketId);
+  const displayValue = selectedMarket
+    ? `${formatMarketId(selectedMarket.marketId)} (${selectedMarket.tradeCount} trades)`
+    : '';
+
+  const handleSelectMarket = (id: string) => {
+    onMarketChange(id);
+    setSearchQuery('');
+    setIsDropdownOpen(false);
+  };
+
+  const handleInputFocus = () => {
+    setIsDropdownOpen(true);
+    setSearchQuery('');
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+    setIsDropdownOpen(true);
   };
 
   return (
@@ -76,29 +120,43 @@ export function MarketSelector({
         </div>
       </div>
 
-      {/* Market Dropdown */}
+      {/* Searchable Market Dropdown */}
       <div className="selector-group">
         <label>Market</label>
-        <select
-          value={marketId}
-          onChange={(e) => onMarketChange(e.target.value)}
-          disabled={isLoading || markets.length === 0}
-        >
-          {isLoading ? (
-            <option>Loading markets...</option>
-          ) : markets.length === 0 ? (
-            <option>No markets available</option>
-          ) : (
-            <>
-              <option value="">Select a market...</option>
-              {markets.map((m) => (
-                <option key={m.marketId} value={m.marketId}>
-                  {formatMarketId(m.marketId)} ({m.tradeCount} trades)
-                </option>
-              ))}
-            </>
+        <div className="searchable-dropdown" ref={dropdownRef}>
+          <input
+            ref={inputRef}
+            type="text"
+            className="market-search-input"
+            placeholder={isLoading ? 'Loading markets...' : 'Search markets...'}
+            value={isDropdownOpen ? searchQuery : displayValue}
+            onChange={handleInputChange}
+            onFocus={handleInputFocus}
+            disabled={isLoading || markets.length === 0}
+          />
+          <span className="dropdown-arrow" onClick={() => !isLoading && setIsDropdownOpen(!isDropdownOpen)}>
+            {isDropdownOpen ? '▲' : '▼'}
+          </span>
+          
+          {isDropdownOpen && !isLoading && markets.length > 0 && (
+            <div className="dropdown-list">
+              {filteredMarkets.length === 0 ? (
+                <div className="dropdown-item no-results">No markets match "{searchQuery}"</div>
+              ) : (
+                filteredMarkets.map((m) => (
+                  <div
+                    key={m.marketId}
+                    className={`dropdown-item ${m.marketId === marketId ? 'selected' : ''}`}
+                    onClick={() => handleSelectMarket(m.marketId)}
+                  >
+                    <span className="market-name">{formatMarketId(m.marketId)}</span>
+                    <span className="trade-count">{m.tradeCount} trades</span>
+                  </div>
+                ))
+              )}
+            </div>
           )}
-        </select>
+        </div>
       </div>
 
       {/* Interval Selector */}
@@ -119,4 +177,3 @@ export function MarketSelector({
     </div>
   );
 }
-
