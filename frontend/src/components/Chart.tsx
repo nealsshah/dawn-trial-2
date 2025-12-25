@@ -19,10 +19,18 @@ interface ChartProps {
   interval: Interval;
 }
 
-// Convert our Candle to TradingView format
+// Get timezone offset in seconds (negative for EST/EDT)
+const TIMEZONE_OFFSET_SECONDS = new Date().getTimezoneOffset() * 60;
+
+// Convert our Candle to TradingView format with local timezone adjustment
 function toChartCandle(candle: Candle): CandlestickData<Time> {
+  // TradingView expects Unix timestamps in seconds
+  // We subtract the timezone offset to display in local time
+  const utcSeconds = new Date(candle.openTime).getTime() / 1000;
+  const localSeconds = utcSeconds - TIMEZONE_OFFSET_SECONDS;
+  
   return {
-    time: (new Date(candle.openTime).getTime() / 1000) as Time,
+    time: localSeconds as Time,
     open: parseFloat(candle.open),
     high: parseFloat(candle.high),
     low: parseFloat(candle.low),
@@ -76,7 +84,9 @@ export function Chart({ exchange, marketId, interval }: ChartProps) {
     }
 
     const currentInterval = intervalRef.current;
-    const tradeTime = new Date(trade.timestamp).getTime() / 1000;
+    // Convert UTC timestamp to local time for chart display
+    const tradeTimeUtc = new Date(trade.timestamp).getTime() / 1000;
+    const tradeTime = tradeTimeUtc - TIMEZONE_OFFSET_SECONDS;
     const intervalSec = getIntervalSeconds(currentInterval);
     const candleTime = Math.floor(tradeTime / intervalSec) * intervalSec;
     const price = parseFloat(trade.price);
