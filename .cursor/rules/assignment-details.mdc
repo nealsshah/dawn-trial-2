@@ -1,0 +1,111 @@
+---
+alwaysApply: true
+---
+# Work Trial [Neal]
+
+## Overview
+
+This work trial is for a **Full-Stack Engineering position** at Dawn Labs / Moonpay. The goal is to assess your ability to build a real-time data indexing and visualization system for prediction market trades.
+
+**Expected Time Commitment:** 8-10 hours
+
+**Deadline:** Please submit by Saturday Dec 27.
+
+**How to Submit:** Email the GitHub repository link and live frontend URL to [nj@dawnlabs.ai](mailto:nj@dawnlabs.ai)
+
+## What You'll Build
+
+You will write code to:
+
+1. Index Polymarket + Kalshi trades
+2. Denormalize the trades into candlestick data (OHLC format)
+3. Build APIs to deliver this candlestick data performantly
+4. Create a frontend that renders the candlestick chart
+
+## Description
+
+The goal of this exercise is to write clean, performant, and expressive TypeScript code that will index Polymarket trades and Kalshi trades in a Postgres database. You will provide an API that will allow users to retrieve one second, one minute, and one hour candles for trade data given a market ID and exchange name.
+
+### Data Sources
+
+**Polymarket Trades (On-Chain)**
+
+- Read trades on-chain from **Polygon** (chain ID: 137)
+- Create an Alchemy account and use an RPC URL to read this data from the chain
+- Index the correct Polymarket contract(s) for live trade data. Up to you in terms of whether you want to use a WS + API, or just API poll only.
+
+**Kalshi Trades (API)**
+
+- Read trades via this API: https://pond.dflow.net/prediction-market-metadata-api-reference/websockets/trades
+
+### Database Design
+
+All trade data should be stored in a Postgres database. Cleanly design the tables such that we are able to retrieve:
+
+1. Latest trades
+2. Latest trades by market
+3. Latest buys by market
+4. Latest sells by market
+
+Also cleanly design tables + APIs such that we can effectively render candles on the frontend instantly. Study other APIs that render candlestick data (e.g., Binance, Coinbase) to best design your own APIs.
+
+### Candlestick Data Requirements
+
+For each time interval (1s, 1m, 1h), calculate and store:
+
+- **Open:** Price of the first trade in the interval
+- **High:** Highest price in the interval
+- **Low:** Lowest price in the interval
+- **Close:** Price of the last trade in the interval
+- **Volume:** Total volume traded in the interval
+
+### API Requirements
+
+Build a **REST API** with the following endpoints:
+
+- Get candles for a market: `GET /candles?exchange={polymarket|kalshi}&marketId={id}&interval={1s|1m|1h}&start={timestamp}&end={timestamp}`
+- Get latest trades: `GET /trades?exchange={polymarket|kalshi}&marketId={id}&limit={number}`
+- **WebSocket support** for streaming live trades to the frontend
+
+Response format should be JSON with clear, well-documented schemas.
+
+### Frontend
+
+Create a simple frontend that:
+
+- Uses this charting library: https://www.tradingview.com/lightweight-charts/
+- Displays candlestick charts with 1s, 1m, and 1h interval options
+- Allows users to select different markets from both exchanges
+- Streams live trades via WebSocket and displays them in real-time
+
+## Technical Requirements
+
+- **Postgres** for data storage
+- **TypeScript** for backend code
+- **React** (optional) for frontend
+- **WebSocket** for live trade streaming
+
+## Evaluation Criteria
+
+- **Code Quality:** Ability to write clean, expressive, well-organized code
+    - Note: Frontend code will not be heavily evaluated (feel free to use AI assistance for UI)
+- **Performance:** How fast and up-to-date are the candles? Query response times?
+- **Correctness:** Accurate trade indexing and candlestick calculations
+- **Database Schema + API Design:** Well-structured tables, efficient queries, intuitive API endpoints
+
+## Deliverables
+
+1. **GitHub Repository** containing:
+    - Frontend code
+    - Backend code
+    - **README** with setup instructions, architecture overview, and how to run locally
+    - Database schema/migration files
+
+## Resources
+
+- [Alchemy](https://www.alchemy.com/) - For Ethereum/Polygon RPC access
+- [Polymarket CTF Exchange Contract](https://polygonscan.com/address/0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E)
+- [TradingView Lightweight Charts Docs](https://tradingview.github.io/lightweight-charts/)
+- Example candlestick API: [Binance API Docs](https://binance-docs.github.io/apidocs/spot/en/#kline-candlestick-data)
+
+**Questions?** Feel free to email [nj@dawnlabs.ai](mailto:nj@dawnlabs.ai) if you need clarification on any requirements.

@@ -1,0 +1,127 @@
+---
+alwaysApply: true
+---
+
+# Prediction Market Trade Indexer - Cursor Rules
+
+## Project Context
+This is a real-time data indexing and visualization system for prediction market trades from Polymarket (on-chain) and Kalshi (API). The system indexes trades into Postgres, aggregates them into OHLC candlesticks, and serves them via REST API and WebSocket.
+
+> **Most Important Assessment Criteria:**  
+> The single most important part of this interview is **the speed of your indexing**. How fast is your indexer compared to real-time? Your implementation should aim to minimize the delay between a trade occurring and it being reflected in your database and API responses. All design decisions should prioritize real-time or near-real-time indexing performance above all.
+
+## Tech Stack
+- **Backend:** TypeScript, Node.js, Express/Fastify
+- **Database:** PostgreSQL
+- **Frontend:** React with TradingView Lightweight Charts
+- **Blockchain:** Polygon (chain ID 137) via Alchemy RPC
+- **Real-time:** WebSocket for live trade streaming
+
+## Code Style & Principles
+
+### General
+- Write simple, straightforward TypeScript - not overly complex but still optimal
+- Prefer explicit types over `any` - define interfaces for all data structures
+- Use async/await over raw Promises
+- Keep functions small and single-purpose
+- No over-engineering - only implement what's needed for current requirements
+
+### File Organization
+- One module per file, named clearly after its responsibility
+- Indexers go in `backend/src/indexers/`
+- API routes go in `backend/src/api/routes/`
+- Database logic goes in `backend/src/db/`
+- Shared types go in `backend/src/types/`
+
+### Database
+- Always use parameterized queries (no string concatenation for SQL)
+- Use transactions for multi-table operations
+- Prefer UPSERT (ON CONFLICT) for idempotent operations
+- Index columns used in WHERE clauses and JOINs
+
+### Error Handling
+- Log errors with context (exchange, marketId, timestamp)
+- Indexers should continue running after errors (log and skip bad data)
+- API should return appropriate HTTP status codes with error messages
+- Never expose internal error details to API consumers
+
+### Naming Conventions
+- Tables: snake_case plural (e.g., `trades`, `candles`)
+- TypeScript interfaces: PascalCase (e.g., `Trade`, `Candle`)
+- Functions: camelCase (e.g., `fetchTrades`, `calculateOHLC`)
+- Constants: UPPER_SNAKE_CASE (e.g., `POLYGON_CHAIN_ID`)
+- Files: kebab-case (e.g., `polymarket-indexer.ts`)
+
+## Key Data Types
+
+Use these exact types throughout the project:
+
+```typescript
+interface Trade {
+  id?: number;
+  exchange: 'polymarket' | 'kalshi';
+  marketId: string;
+  price: string;        // Use string for decimals to avoid precision loss
+  quantity: string;
+  side: 'buy' | 'sell';
+  timestamp: Date;
+  txHash?: string;      // Only for on-chain trades
+}
+
+interface Candle {
+  exchange: 'polymarket' | 'kalshi';
+  marketId: string;
+  interval: '1s' | '1m' | '1h';
+  openTime: Date;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  volume: string;
+}
+```
+
+## API Design
+- REST endpoints follow pattern: `GET /resource?queryParams`
+- Always validate query parameters before processing
+- Return consistent JSON structure: `{ data: [...] }` or `{ error: "message" }`
+- Use ISO 8601 for timestamps in API responses
+- Pagination: use `limit` and `offset` or cursor-based
+
+## WebSocket Protocol
+- Client sends: `{ "action": "subscribe", "exchange": "kalshi", "marketId": "XXX" }`
+- Server sends: `{ "type": "trade", "data": { ...trade } }`
+- Handle reconnection gracefully on both client and server
+
+## Testing Checkpoints
+Before moving to the next phase, verify:
+1. **Database:** Can insert and query trades/candles
+2. **Indexer:** Trades appearing in DB with correct data
+3. **API:** Endpoints return expected JSON
+4. **WebSocket:** Live trades stream to connected clients
+5. **Frontend:** Chart renders and updates in real-time
+
+## Common Pitfalls to Avoid
+- Don't mix business logic in API route handlers
+- Don't store prices as JavaScript numbers (use strings or Decimal type)
+- Don't forget to handle WebSocket disconnections and reconnections
+- Don't query raw trades for historical candles (use pre-aggregated candles table)
+- Don't commit API keys or database credentials
+
+## Environment Variables
+Required environment variables (use a `.env` file in the project root directory):
+```
+DATABASE_URL=postgres://user:pass@localhost:5432/trades
+ALCHEMY_API_KEY=your_key
+ALCHEMY_WS_URL=wss://polygon-mainnet.g.alchemy.com/v2/your_key
+PORT=3000
+```
+_Note: The `.env` file should always be located in the root directory of the project._
+
+## When Generating Code
+- Always check if similar patterns exist in the codebase first
+- Reuse existing DB client, types, and utilities
+- Follow the established file structure
+- Include appropriate error handling
+- Add brief comments only for non-obvious logic
+

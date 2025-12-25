@@ -1,0 +1,62 @@
+# ===== OS / Editor =====
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+*.log
+
+# IDEs
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.iml
+
+# ===== Node / Package Managers =====
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# package manager caches (optional)
+.npm/
+.pnpm-store/
+
+# ===== Env / Secrets =====
+.env
+.env.*
+!.env.example
+
+# ===== Build Outputs =====
+dist/
+build/
+out/
+coverage/
+*.tsbuildinfo
+
+# ===== Next.js =====
+.next/
+.vercel/
+
+# ===== CRA / Vite / Misc =====
+.cache/
+.parcel-cache/
+.vite/
+.vitest/
+
+# ===== Logs =====
+logs/
+*.log
+
+# ===== Runtime / Misc =====
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# ===== Optional: local DB / data =====
+*.sqlite
+*.sqlite3
+data/
