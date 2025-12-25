@@ -217,7 +217,7 @@ class PolymarketIndexer {
       // Try to get block timestamp for more accurate timing
       if (this.client && log.blockNumber) {
         try {
-          ({ blockNumber: log.blockNumber });
+          const block = await this.client.getBlock({ blockNumber: log.blockNumber });
           trade.timestamp = new Date(Number(block.timestamp) * 1000);
         } catch {
           // Use current time if block fetch fails
