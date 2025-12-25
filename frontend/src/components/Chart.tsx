@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   createChart,
   ColorType,
@@ -46,15 +46,28 @@ export function Chart({ exchange, marketId, interval }: ChartProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const candlesRef = useRef<Map<number, CandlestickData<Time>>>(new Map());
+  
+  // Keep interval in a ref to avoid stale closures
+  const intervalRef = useRef(interval);
+  useEffect(() => {
+    intervalRef.current = interval;
+  }, [interval]);
 
-  // Handle live trade updates
-  const handleTrade = (trade: Trade) => {
-    if (!seriesRef.current) return;
+  // Handle live trade updates - use useCallback with stable deps
+  const handleTrade = useCallback((trade: Trade) => {
+    const series = seriesRef.current;
+    if (!series) {
+      console.log('[Chart] No series ref, skipping trade update');
+      return;
+    }
 
+    const currentInterval = intervalRef.current;
     const tradeTime = new Date(trade.timestamp).getTime() / 1000;
-    const intervalSec = getIntervalSeconds(interval);
+    const intervalSec = getIntervalSeconds(currentInterval);
     const candleTime = Math.floor(tradeTime / intervalSec) * intervalSec;
     const price = parseFloat(trade.price);
+
+    console.log(`[Chart] Processing trade: price=${price}, candleTime=${candleTime}, interval=${currentInterval}`);
 
     const existing = candlesRef.current.get(candleTime);
 
@@ -68,7 +81,8 @@ export function Chart({ exchange, marketId, interval }: ChartProps) {
         close: price,
       };
       candlesRef.current.set(candleTime, updated);
-      seriesRef.current.update(updated);
+      series.update(updated);
+      console.log(`[Chart] Updated candle: O=${updated.open} H=${updated.high} L=${updated.low} C=${updated.close}`);
     } else {
       // Create new candle
       const newCandle: CandlestickData<Time> = {
@@ -79,9 +93,10 @@ export function Chart({ exchange, marketId, interval }: ChartProps) {
         close: price,
       };
       candlesRef.current.set(candleTime, newCandle);
-      seriesRef.current.update(newCandle);
+      series.update(newCandle);
+      console.log(`[Chart] Created new candle: price=${price}, time=${candleTime}`);
     }
-  };
+  }, []); // Empty deps - uses refs internally
 
   const { isConnected, lastTrade } = useWebSocket({
     exchange,
@@ -170,7 +185,12 @@ export function Chart({ exchange, marketId, interval }: ChartProps) {
       .then((candles) => {
         if (!seriesRef.current) return;
 
-        const chartCandles = candles.map(toChartCandle);
+        // Sort candles by time ascending (oldest first)
+        const sortedCandles = candles.sort((a, b) => 
+          new Date(a.openTime).getTime() - new Date(b.openTime).getTime()
+        );
+        
+        const chartCandles = sortedCandles.map(toChartCandle);
         
         // Store candles for live updates
         chartCandles.forEach((c) => {
@@ -180,6 +200,8 @@ export function Chart({ exchange, marketId, interval }: ChartProps) {
         seriesRef.current.setData(chartCandles);
         chartRef.current?.timeScale().fitContent();
         setIsLoading(false);
+        
+        console.log(`[Chart] Loaded ${chartCandles.length} candles for ${marketId}`);
       })
       .catch((err) => {
         setError(err.message);
@@ -220,4 +242,3 @@ export function Chart({ exchange, marketId, interval }: ChartProps) {
     </div>
   );
 }
-

@@ -186,8 +186,13 @@ class TradeWebSocketServer {
     const subscribers = this.subscriptions.get(key);
 
     if (!subscribers || subscribers.size === 0) {
+      // Uncomment below to debug subscription mismatches
+      // console.log(`[WebSocket] No subscribers for ${key}`);
       return; // No subscribers for this market
     }
+    
+    console.log(`[WebSocket] Broadcasting trade to ${subscribers.size} subscriber(s) for ${key}`);
+
 
     const message: TradeMessage = {
       type: 'trade',

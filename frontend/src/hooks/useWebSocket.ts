@@ -25,24 +25,38 @@ export function useWebSocket({
   const [lastTrade, setLastTrade] = useState<Trade | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  // Store current subscription to avoid stale closures
+  // Use refs to avoid stale closures
   const currentSubscription = useRef({ exchange, marketId });
+  const onTradeRef = useRef(onTrade);
+
+  // Keep onTrade ref up to date
+  useEffect(() => {
+    onTradeRef.current = onTrade;
+  }, [onTrade]);
+
+  // Update subscription ref
+  useEffect(() => {
+    currentSubscription.current = { exchange, marketId };
+  }, [exchange, marketId]);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
     }
 
+    console.log('[WebSocket] Connecting...');
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
 
     ws.onopen = () => {
+      console.log('[WebSocket] Connected');
       setIsConnected(true);
       setError(null);
       
       // Subscribe to the market
       const { exchange: ex, marketId: mId } = currentSubscription.current;
       if (ex && mId) {
+        console.log(`[WebSocket] Subscribing to ${ex}:${mId}`);
         ws.send(JSON.stringify({
           action: 'subscribe',
           exchange: ex,
@@ -56,17 +70,22 @@ export function useWebSocket({
         const message: WSMessage = JSON.parse(event.data);
         
         if (message.type === 'trade') {
+          console.log('[WebSocket] Trade received:', message.data.price);
           setLastTrade(message.data);
-          onTrade?.(message.data);
+          // Use ref to get latest callback
+          onTradeRef.current?.(message.data);
         } else if (message.type === 'error') {
           setError(message.message);
+        } else if (message.type === 'subscribed') {
+          console.log(`[WebSocket] Subscribed to ${message.exchange}:${message.marketId}`);
         }
       } catch (err) {
-        console.error('Failed to parse WebSocket message:', err);
+        console.error('[WebSocket] Failed to parse message:', err);
       }
     };
 
     ws.onclose = () => {
+      console.log('[WebSocket] Disconnected');
       setIsConnected(false);
       
       // Reconnect after 3 seconds
@@ -77,15 +96,14 @@ export function useWebSocket({
       }, 3000);
     };
 
-    ws.onerror = () => {
+    ws.onerror = (err) => {
+      console.error('[WebSocket] Error:', err);
       setError('WebSocket connection error');
     };
-  }, [onTrade]);
+  }, []);
 
   // Handle subscription changes
   useEffect(() => {
-    currentSubscription.current = { exchange, marketId };
-
     if (!marketId) {
       // Close connection if no market selected
       if (wsRef.current) {
@@ -97,7 +115,7 @@ export function useWebSocket({
 
     // If connected, send new subscription
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      // Unsubscribe from previous (handled by server on new subscribe)
+      console.log(`[WebSocket] Resubscribing to ${exchange}:${marketId}`);
       wsRef.current.send(JSON.stringify({
         action: 'subscribe',
         exchange,
@@ -118,4 +136,3 @@ export function useWebSocket({
 
   return { isConnected, lastTrade, error };
 }
-
