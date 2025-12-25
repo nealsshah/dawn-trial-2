@@ -100,7 +100,7 @@ export async function getKalshiMarketTitles(
     
     if (cached && Date.now() - cached.fetchedAt.getTime() < CACHE_TTL_MS) {
       results.set(ticker, cached.title);
-    } else {
+      } else {
       tickersToFetch.push(ticker);
     }
   }
@@ -139,12 +139,12 @@ export async function getKalshiMarketTitles(
     }
     
     console.log(`[MarketMetadata] Fetched ${results.size - (tickers.length - tickersToFetch.length)} new Kalshi titles`);
+    }
+
+    return results;
   }
 
-  return results;
-}
-
-/**
+  /**
  * Batch fetch market titles for multiple Polymarket tokens
  * Returns a map of clobTokenId -> title (enhanced with outcome)
  */
