@@ -87,26 +87,34 @@ body {
 
 /* Controls */
 .controls {
-  padding: 1rem 2rem;
-  background: var(--bg-secondary);
+  padding: 0.75rem 2rem;
+  background: linear-gradient(180deg, rgba(17, 17, 24, 0.92), rgba(17, 17, 24, 0.86));
   border-bottom: 1px solid var(--border-color);
+  backdrop-filter: blur(10px);
 }
 
 .market-selector {
-  display: flex;
-  gap: 2rem;
-  flex-wrap: wrap;
-  align-items: flex-end;
+  /* Desktop toolbar layout: Exchange | Market | Interval */
+  display: grid;
+  grid-template-columns: 260px minmax(420px, 1fr) 220px;
+  gap: 0.75rem;
+  align-items: end;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .selector-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  background: rgba(26, 26, 36, 0.75);
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
 }
 
 .selector-group label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -156,14 +164,14 @@ body {
 .toggle-group {
   display: flex;
   gap: 0.25rem;
-  background: var(--bg-primary);
+  background: rgba(10, 10, 15, 0.65);
   padding: 0.25rem;
   border-radius: 0.5rem;
   border: 1px solid var(--border-color);
 }
 
 .toggle-btn {
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 0.875rem;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -174,6 +182,7 @@ body {
   transition: all 0.15s ease;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation; /* Improve touch responsiveness */
+  min-height: 40px;
 }
 
 .toggle-btn:hover {
@@ -217,20 +226,22 @@ select:disabled {
 /* Searchable Dropdown */
 .searchable-dropdown {
   position: relative;
-  min-width: 600px;
-  max-width: 800px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   z-index: 10; /* Ensure dropdown appears above other content */
 }
 
 .market-search-input {
   width: 100%;
-  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  padding: 0.625rem 2.25rem 0.625rem 0.75rem;
   font-size: 0.875rem;
   background: var(--bg-primary);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   cursor: text;
+  min-height: 44px;
 }
 
 .market-search-input:focus {
@@ -250,11 +261,11 @@ select:disabled {
 
 .dropdown-arrow {
   position: absolute;
-  right: 0.75rem;
+  right: 0.875rem;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-muted);
-  font-size: 0.625rem;
+  font-size: 0.7rem;
   cursor: pointer;
   padding: 0.25rem;
 }
@@ -652,6 +663,7 @@ select:disabled {
   }
 
   .market-selector {
+    display: flex;
     flex-direction: column;
     gap: 0.75rem;
   }
