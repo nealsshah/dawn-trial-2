@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import db from '../../db/client';
-import { getKalshiMarketTitles } from '../../services/market-metadata';
+import { getKalshiMarketTitles, getPolymarketMarketTitles } from '../../services/market-metadata';
 
 const router = Router();
 
@@ -195,13 +195,23 @@ router.get('/markets', async (req: Request, res: Response) => {
       ? await getKalshiMarketTitles(kalshiTickers)
       : new Map<string, string>();
 
+    // Fetch market titles for Polymarket markets (using CLOB token IDs)
+    const polymarketTokenIds = result.rows
+      .filter((row) => row.exchange === 'polymarket')
+      .map((row) => row.market_id);
+    
+    const polymarketTitles = polymarketTokenIds.length > 0
+      ? await getPolymarketMarketTitles(polymarketTokenIds)
+      : new Map<string, string>();
+
     const markets = result.rows.map((row) => {
       // Get title from cache/API, fallback to marketId if not found
       let title: string | null = null;
       if (row.exchange === 'kalshi') {
         title = kalshiTitles.get(row.market_id) || null;
+      } else if (row.exchange === 'polymarket') {
+        title = polymarketTitles.get(row.market_id) || null;
       }
-      // For polymarket, title remains null (as requested by user)
 
       return {
         exchange: row.exchange,

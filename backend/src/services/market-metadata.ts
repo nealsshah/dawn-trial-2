@@ -1,4 +1,5 @@
 import { fetchKalshiMarket, type KalshiMarket } from './kalshi-api';
+import { fetchPolymarketByTokenId, fetchPolymarketsByTokenIds, type PolymarketMarket } from './polymarket-api';
 
 /**
  * Market Metadata Service
@@ -9,6 +10,7 @@ interface MarketMetadata {
   ticker: string;
   title: string;
   subtitle?: string;
+  actualMarketId?: string; // For Polymarket, the real market ID (not token ID)
   fetchedAt: Date;
 }
 
@@ -44,6 +46,36 @@ export async function getKalshiMarketTitle(ticker: string): Promise<string | nul
       fetchedAt: new Date(),
     });
     return market.title;
+  }
+
+  return null;
+}
+
+/**
+ * Get market title for a Polymarket token
+ * Returns cached value if available and not expired
+ */
+export async function getPolymarketMarketTitle(clobTokenId: string): Promise<string | null> {
+  const cacheKey = `polymarket:${clobTokenId}`;
+  
+  // Check cache first
+  const cached = metadataCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt.getTime() < CACHE_TTL_MS) {
+    return cached.title;
+  }
+
+  // Fetch from Gamma API
+  const market = await fetchPolymarketByTokenId(clobTokenId);
+  
+  if (market) {
+    // Cache the result
+    metadataCache.set(cacheKey, {
+      ticker: clobTokenId,
+      title: market.question,
+      actualMarketId: market.id,
+      fetchedAt: new Date(),
+    });
+    return market.question;
   }
 
   return null;
@@ -104,14 +136,59 @@ export async function getKalshiMarketTitles(
       }
     }
     
-    console.log(`[MarketMetadata] Fetched ${results.size - (tickers.length - tickersToFetch.length)} new titles`);
+    console.log(`[MarketMetadata] Fetched ${results.size - (tickers.length - tickersToFetch.length)} new Kalshi titles`);
   }
 
   return results;
 }
 
 /**
- * Get market title - returns ticker as fallback if title not found
+ * Batch fetch market titles for multiple Polymarket tokens
+ * Returns a map of clobTokenId -> title
+ */
+export async function getPolymarketMarketTitles(
+  clobTokenIds: string[]
+): Promise<Map<string, string>> {
+  const results = new Map<string, string>();
+  const tokensToFetch: string[] = [];
+
+  // Check cache first for each token
+  for (const tokenId of clobTokenIds) {
+    const cacheKey = `polymarket:${tokenId}`;
+    const cached = metadataCache.get(cacheKey);
+    
+    if (cached && Date.now() - cached.fetchedAt.getTime() < CACHE_TTL_MS) {
+      results.set(tokenId, cached.title);
+    } else {
+      tokensToFetch.push(tokenId);
+    }
+  }
+
+  // Fetch uncached tokens from API
+  if (tokensToFetch.length > 0) {
+    console.log(`[MarketMetadata] Fetching titles for ${tokensToFetch.length} Polymarket markets...`);
+    
+    const markets = await fetchPolymarketsByTokenIds(tokensToFetch);
+    
+    for (const [tokenId, market] of markets) {
+      const cacheKey = `polymarket:${tokenId}`;
+      metadataCache.set(cacheKey, {
+        ticker: tokenId,
+        title: market.question,
+        actualMarketId: market.id,
+        fetchedAt: new Date(),
+      });
+      results.set(tokenId, market.question);
+    }
+    
+    console.log(`[MarketMetadata] Fetched ${markets.size} new Polymarket titles`);
+  }
+
+  return results;
+}
+
+/**
+ * Get market title - returns marketId as fallback if title not found
  */
 export async function getMarketDisplayName(
   exchange: 'kalshi' | 'polymarket',
@@ -122,8 +199,22 @@ export async function getMarketDisplayName(
     return title || marketId;
   }
   
-  // For Polymarket, just return the marketId for now
+  if (exchange === 'polymarket') {
+    const title = await getPolymarketMarketTitle(marketId);
+    return title || formatTokenId(marketId);
+  }
+  
   return marketId;
+}
+
+/**
+ * Format a long token ID for display
+ */
+function formatTokenId(tokenId: string): string {
+  if (tokenId.length > 20) {
+    return `${tokenId.slice(0, 8)}...${tokenId.slice(-6)}`;
+  }
+  return tokenId;
 }
 
 /**
@@ -142,4 +233,3 @@ export function getMetadataCacheStats(): { size: number; entries: string[] } {
     entries: Array.from(metadataCache.keys()),
   };
 }
-
