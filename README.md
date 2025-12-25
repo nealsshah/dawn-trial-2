@@ -41,7 +41,6 @@ A real-time data indexing and visualization system for prediction market trades 
 2. **Configure environment:**
    ```bash
    cp .env.example .env
-   # Edit .env with your Alchemy API key
    ```
 
 3. **Start PostgreSQL:**
