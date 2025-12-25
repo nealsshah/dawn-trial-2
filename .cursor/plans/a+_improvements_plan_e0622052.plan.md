@@ -7,16 +7,16 @@ todos:
     status: completed
   - id: timestamps
     content: Fix block timestamp handling to always use block time, never fall back to new Date()
-    status: pending
+    status: completed
   - id: websocket-unsub
     content: Add unsubscribe logic in frontend useWebSocket hook when changing markets
-    status: pending
+    status: completed
   - id: env-example
     content: Create .env.example file with all required environment variables
-    status: pending
+    status: completed
   - id: latency-metrics
     content: Add p50/p95/p99 latency tracking and per-exchange breakdown to stats
-    status: pending
+    status: completed
 ---
 
 # A+ Improvements Plan

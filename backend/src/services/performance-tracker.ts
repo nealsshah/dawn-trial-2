@@ -10,6 +10,12 @@ interface TradeMetric {
   latencyMs: number; // Difference
 }
 
+interface LatencyPercentiles {
+  p50: number;
+  p95: number;
+  p99: number;
+}
+
 interface ExchangeStats {
   totalTrades: number;
   tradesLast60s: number;
@@ -17,6 +23,7 @@ interface ExchangeStats {
   avgLatencyMs: number;
   minLatencyMs: number;
   maxLatencyMs: number;
+  latencyPercentiles: LatencyPercentiles;
   lastTradeAt: string | null;
   lastIndexedAt: string | null;
 }
@@ -39,6 +46,33 @@ interface PerformanceStats {
     totalCandlesInDb: number;
     oldestTrade: string | null;
     newestTrade: string | null;
+  };
+}
+
+/**
+ * Calculate percentile value from a sorted array
+ */
+function calculatePercentile(sortedValues: number[], percentile: number): number {
+  if (sortedValues.length === 0) return 0;
+  const index = Math.ceil((percentile / 100) * sortedValues.length) - 1;
+  return sortedValues[Math.max(0, index)];
+}
+
+/**
+ * Calculate p50, p95, p99 from an array of latencies
+ */
+function calculateLatencyPercentiles(latencies: number[]): LatencyPercentiles {
+  if (latencies.length === 0) {
+    return { p50: 0, p95: 0, p99: 0 };
+  }
+  
+  // Sort a copy of the array
+  const sorted = [...latencies].sort((a, b) => a - b);
+  
+  return {
+    p50: Math.round(calculatePercentile(sorted, 50)),
+    p95: Math.round(calculatePercentile(sorted, 95)),
+    p99: Math.round(calculatePercentile(sorted, 99)),
   };
 }
 
@@ -126,6 +160,7 @@ class PerformanceTracker {
         : 0,
       minLatencyMs: latencies.length > 0 ? Math.min(...latencies) : 0,
       maxLatencyMs: latencies.length > 0 ? Math.max(...latencies) : 0,
+      latencyPercentiles: calculateLatencyPercentiles(latencies),
       lastTradeAt: stats.lastTradeTimestamp
         ? new Date(stats.lastTradeTimestamp).toISOString()
         : null,
@@ -202,20 +237,49 @@ class PerformanceTracker {
   getQuickStats(): {
     tradesPerSecond: number;
     avgLatencyMs: number;
+    latencyPercentiles: LatencyPercentiles;
     uptimeSeconds: number;
+    exchanges: {
+      kalshi: { tps: number; avgLatencyMs: number; p50: number; p95: number };
+      polymarket: { tps: number; avgLatencyMs: number; p50: number; p95: number };
+    };
   } {
     const recentTrades = this.getTradesInWindow();
-    const allLatencies = [
-      ...this.exchangeStats.kalshi.latencies.slice(-100),
-      ...this.exchangeStats.polymarket.latencies.slice(-100),
-    ];
+    const kalshiTrades = recentTrades.filter((t) => t.exchange === 'kalshi');
+    const polymarketTrades = recentTrades.filter((t) => t.exchange === 'polymarket');
+    
+    const kalshiLatencies = this.exchangeStats.kalshi.latencies.slice(-100);
+    const polymarketLatencies = this.exchangeStats.polymarket.latencies.slice(-100);
+    const allLatencies = [...kalshiLatencies, ...polymarketLatencies];
+
+    const kalshiPercentiles = calculateLatencyPercentiles(kalshiLatencies);
+    const polymarketPercentiles = calculateLatencyPercentiles(polymarketLatencies);
 
     return {
       tradesPerSecond: Math.round((recentTrades.length / 60) * 100) / 100,
       avgLatencyMs: allLatencies.length > 0
         ? Math.round(allLatencies.reduce((a, b) => a + b, 0) / allLatencies.length)
         : 0,
+      latencyPercentiles: calculateLatencyPercentiles(allLatencies),
       uptimeSeconds: Math.round((Date.now() - this.startTime) / 1000),
+      exchanges: {
+        kalshi: {
+          tps: Math.round((kalshiTrades.length / 60) * 100) / 100,
+          avgLatencyMs: kalshiLatencies.length > 0
+            ? Math.round(kalshiLatencies.reduce((a, b) => a + b, 0) / kalshiLatencies.length)
+            : 0,
+          p50: kalshiPercentiles.p50,
+          p95: kalshiPercentiles.p95,
+        },
+        polymarket: {
+          tps: Math.round((polymarketTrades.length / 60) * 100) / 100,
+          avgLatencyMs: polymarketLatencies.length > 0
+            ? Math.round(polymarketLatencies.reduce((a, b) => a + b, 0) / polymarketLatencies.length)
+            : 0,
+          p50: polymarketPercentiles.p50,
+          p95: polymarketPercentiles.p95,
+        },
+      },
     };
   }
 }

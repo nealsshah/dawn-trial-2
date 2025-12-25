@@ -28,6 +28,8 @@ export function useWebSocket({
   
   // Use refs to avoid stale closures
   const currentSubscription = useRef({ exchange, marketId });
+  // Track previous subscription for cleanup
+  const previousSubscription = useRef<{ exchange: Exchange; marketId: string } | null>(null);
   const onTradeRef = useRef(onTrade);
 
   // Keep onTrade ref up to date
@@ -79,6 +81,8 @@ export function useWebSocket({
           setError(message.message);
         } else if (message.type === 'subscribed') {
           console.log(`[WebSocket] Subscribed to ${message.exchange}:${message.marketId}`);
+        } else if (message.type === 'unsubscribed') {
+          console.log(`[WebSocket] Unsubscribed from ${message.exchange}:${message.marketId}`);
         }
       } catch (err) {
         console.error('[WebSocket] Failed to parse message:', err);
@@ -111,12 +115,28 @@ export function useWebSocket({
         wsRef.current.close();
         wsRef.current = null;
       }
+      previousSubscription.current = null;
+      setLastTrade(null);
       return;
     }
 
-    // If connected, send new subscription
+    // If connected, handle subscription change
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      console.log(`[WebSocket] Resubscribing to ${exchange}:${marketId}`);
+      // Unsubscribe from previous market first (if different)
+      const prev = previousSubscription.current;
+      if (prev && (prev.exchange !== exchange || prev.marketId !== marketId)) {
+        console.log(`[WebSocket] Unsubscribing from ${prev.exchange}:${prev.marketId}`);
+        wsRef.current.send(JSON.stringify({
+          action: 'unsubscribe',
+          exchange: prev.exchange,
+          marketId: prev.marketId,
+        }));
+        // Clear stale trade data when switching markets
+        setLastTrade(null);
+      }
+
+      // Subscribe to new market
+      console.log(`[WebSocket] Subscribing to ${exchange}:${marketId}`);
       wsRef.current.send(JSON.stringify({
         action: 'subscribe',
         exchange,
@@ -126,6 +146,9 @@ export function useWebSocket({
       // Connect and subscribe
       connect();
     }
+
+    // Track this subscription for future cleanup
+    previousSubscription.current = { exchange, marketId };
 
     return () => {
       if (wsRef.current) {

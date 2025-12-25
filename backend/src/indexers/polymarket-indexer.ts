@@ -78,6 +78,8 @@ class PolymarketIndexer {
   private isRunning = false;
   private processedTxHashes: Set<string> = new Set();
   private backfillComplete = false;
+  // Cache block timestamps to avoid repeated RPC calls during backfill
+  private blockTimestampCache: Map<bigint, Date> = new Map();
 
   async start() {
     const alchemyWsUrl = process.env.ALCHEMY_WS_URL;
@@ -259,25 +261,18 @@ class PolymarketIndexer {
       // Format quantity (6 decimals for outcome tokens)
       const quantity = formatUnits(outcomeAmount, 6);
 
+      // Get block timestamp for accurate trade timing (required for latency metrics)
+      const timestamp = await this.getBlockTimestamp(log.blockNumber);
+
       const trade: Trade = {
         exchange: 'polymarket',
         marketId: outcomeTokenId.toString(),
         price: price.toFixed(4),
         quantity,
         side,
-        timestamp: new Date(), // Will be updated with block timestamp if needed
+        timestamp,
         txHash: txHash ?? undefined,
       };
-
-      // Try to get block timestamp for more accurate timing
-      if (this.client && log.blockNumber) {
-        try {
-          const block = await this.client.getBlock({ blockNumber: log.blockNumber });
-          trade.timestamp = new Date(Number(block.timestamp) * 1000);
-        } catch {
-          // Use current time if block fetch fails
-        }
-      }
 
       const indexedAt = new Date();
       await this.insertTrade(trade);
@@ -320,6 +315,57 @@ class PolymarketIndexer {
         this.start();
       }
     }, 5000);
+  }
+
+  /**
+   * Get block timestamp with caching and retry logic
+   * This is critical for accurate latency measurements
+   */
+  private async getBlockTimestamp(blockNumber: bigint | null): Promise<Date> {
+    // If no block number, use current time (shouldn't happen in practice)
+    if (!blockNumber || !this.client) {
+      console.warn('[Polymarket] No block number available, using current time');
+      return new Date();
+    }
+
+    // Check cache first (important for backfill efficiency)
+    const cached = this.blockTimestampCache.get(blockNumber);
+    if (cached) {
+      return cached;
+    }
+
+    // Fetch block with retry logic
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 500;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const block = await this.client.getBlock({ blockNumber });
+        const timestamp = new Date(Number(block.timestamp) * 1000);
+
+        // Cache the result (limit cache size to prevent memory issues)
+        this.blockTimestampCache.set(blockNumber, timestamp);
+        if (this.blockTimestampCache.size > 1000) {
+          // Remove oldest entries
+          const firstKey = this.blockTimestampCache.keys().next().value;
+          if (firstKey !== undefined) {
+            this.blockTimestampCache.delete(firstKey);
+          }
+        }
+
+        return timestamp;
+      } catch (error) {
+        if (attempt === MAX_RETRIES) {
+          console.warn(`[Polymarket] Failed to fetch block ${blockNumber} after ${MAX_RETRIES} attempts, using current time`);
+          return new Date();
+        }
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+      }
+    }
+
+    // Fallback (shouldn't reach here)
+    return new Date();
   }
 }
 
