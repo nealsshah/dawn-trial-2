@@ -151,7 +151,18 @@ export function MarketSelector({
             {isDropdownOpen ? '▲' : '▼'}
           </span>
           
-          {isDropdownOpen && !isLoading && markets.length > 0 && (
+          {/* Loading spinner - show when loading (even if dropdown is open) */}
+          {isLoading && (
+            <div className="dropdown-list loading">
+              <div className="loading-spinner-container">
+                <div className="loading-spinner"></div>
+                <span className="loading-text">Loading markets...</span>
+              </div>
+            </div>
+          )}
+          
+          {/* Markets dropdown - show when loaded, dropdown is open, and we have markets */}
+          {!isLoading && isDropdownOpen && markets.length > 0 && (
             <div className="dropdown-list">
               {filteredMarkets.length === 0 ? (
                 <div className="dropdown-item no-results">No markets match "{searchQuery}"</div>

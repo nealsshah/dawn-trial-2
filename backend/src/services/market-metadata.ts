@@ -1,5 +1,5 @@
 import { fetchKalshiMarket, type KalshiMarket } from './kalshi-api';
-import { fetchPolymarketByTokenId, fetchPolymarketsByTokenIds, type PolymarketMarket } from './polymarket-api';
+import { fetchPolymarketByTokenId, fetchPolymarketsByTokenIds, getPolymarketTitle, type PolymarketMarketWithOutcome } from './polymarket-api';
 
 /**
  * Market Metadata Service
@@ -54,6 +54,7 @@ export async function getKalshiMarketTitle(ticker: string): Promise<string | nul
 /**
  * Get market title for a Polymarket token
  * Returns cached value if available and not expired
+ * Title includes the outcome (Up/Down, Yes/No) for the specific token
  */
 export async function getPolymarketMarketTitle(clobTokenId: string): Promise<string | null> {
   const cacheKey = `polymarket:${clobTokenId}`;
@@ -64,18 +65,19 @@ export async function getPolymarketMarketTitle(clobTokenId: string): Promise<str
     return cached.title;
   }
 
-  // Fetch from Gamma API
+  // Fetch enhanced title from Gamma API (includes outcome like "Up", "Down", etc.)
+  const title = await getPolymarketTitle(clobTokenId);
   const market = await fetchPolymarketByTokenId(clobTokenId);
   
-  if (market) {
-    // Cache the result
+  if (title && market) {
+    // Cache the result with the enhanced title
     metadataCache.set(cacheKey, {
       ticker: clobTokenId,
-      title: market.question,
+      title: title, // Enhanced title with outcome
       actualMarketId: market.id,
       fetchedAt: new Date(),
     });
-    return market.question;
+    return title;
   }
 
   return null;
@@ -144,7 +146,7 @@ export async function getKalshiMarketTitles(
 
 /**
  * Batch fetch market titles for multiple Polymarket tokens
- * Returns a map of clobTokenId -> title
+ * Returns a map of clobTokenId -> title (enhanced with outcome)
  */
 export async function getPolymarketMarketTitles(
   clobTokenIds: string[]
@@ -171,14 +173,22 @@ export async function getPolymarketMarketTitles(
     const markets = await fetchPolymarketsByTokenIds(tokensToFetch);
     
     for (const [tokenId, market] of markets) {
+      // Build enhanced title with outcome (Up/Down, Yes/No) or groupItemTitle
+      let title = market.question;
+      if (market.groupItemTitle && market.groupItemTitle !== '0') {
+        title = `${title} (${market.groupItemTitle})`;
+      } else if (market.outcomeForToken) {
+        title = `${title} (${market.outcomeForToken})`;
+      }
+      
       const cacheKey = `polymarket:${tokenId}`;
       metadataCache.set(cacheKey, {
         ticker: tokenId,
-        title: market.question,
+        title: title,
         actualMarketId: market.id,
         fetchedAt: new Date(),
       });
-      results.set(tokenId, market.question);
+      results.set(tokenId, title); // Use enhanced title with outcome
     }
     
     console.log(`[MarketMetadata] Fetched ${markets.size} new Polymarket titles`);

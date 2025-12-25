@@ -10,7 +10,7 @@ export interface PolymarketMarket {
   question: string; // Market title/question
   slug: string;
   conditionId: string;
-  outcomes: string; // JSON string array like '["Yes", "No"]'
+  outcomes: string; // JSON string array like '["Yes", "No"]' or '["Up", "Down"]'
   outcomePrices: string; // JSON string array like '["0.45", "0.55"]'
   clobTokenIds: string; // JSON string array of the two token IDs
   volume: string;
@@ -19,21 +19,45 @@ export interface PolymarketMarket {
   image?: string;
   icon?: string;
   endDate?: string;
+  groupItemTitle?: string; // For markets with thresholds, e.g., "↑ 250,000"
+  groupItemThreshold?: string; // Numeric threshold value
+}
+
+export interface PolymarketMarketWithOutcome extends PolymarketMarket {
+  outcomeForToken: string; // The outcome this specific token represents (e.g., "Up", "Down", "Yes", "No")
 }
 
 interface GammaApiResponse extends Array<PolymarketMarket> {}
 
-// Cache: clobTokenId -> market data
-const marketCache = new Map<string, PolymarketMarket>();
+// Cache: clobTokenId -> market data with outcome
+const marketCache = new Map<string, PolymarketMarketWithOutcome>();
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 const cacheTimestamps = new Map<string, number>();
+
+/**
+ * Get the outcome name for a specific CLOB token ID
+ */
+function getOutcomeForToken(market: PolymarketMarket, clobTokenId: string): string {
+  try {
+    const outcomes = JSON.parse(market.outcomes) as string[];
+    const tokenIds = JSON.parse(market.clobTokenIds) as string[];
+    
+    const index = tokenIds.indexOf(clobTokenId);
+    if (index !== -1 && outcomes[index]) {
+      return outcomes[index];
+    }
+  } catch {
+    // Ignore parsing errors
+  }
+  return '';
+}
 
 /**
  * Fetch market by CLOB token ID from Gamma API
  */
 export async function fetchPolymarketByTokenId(
   clobTokenId: string
-): Promise<PolymarketMarket | null> {
+): Promise<PolymarketMarketWithOutcome | null> {
   // Check cache first
   const cached = marketCache.get(clobTokenId);
   const cachedAt = cacheTimestamps.get(clobTokenId);
@@ -60,16 +84,26 @@ export async function fetchPolymarketByTokenId(
 
     const market = data[0];
     
-    // Cache the result
-    marketCache.set(clobTokenId, market);
+    // Create market with outcome for this specific token
+    const marketWithOutcome: PolymarketMarketWithOutcome = {
+      ...market,
+      outcomeForToken: getOutcomeForToken(market, clobTokenId),
+    };
+    
+    // Cache the result for this token
+    marketCache.set(clobTokenId, marketWithOutcome);
     cacheTimestamps.set(clobTokenId, Date.now());
     
-    // Also cache by the other token ID if present
+    // Also cache for the other token IDs (with their respective outcomes)
     try {
       const tokenIds = JSON.parse(market.clobTokenIds) as string[];
       for (const tokenId of tokenIds) {
-        if (tokenId !== clobTokenId) {
-          marketCache.set(tokenId, market);
+        if (tokenId !== clobTokenId && !marketCache.has(tokenId)) {
+          const otherOutcome = getOutcomeForToken(market, tokenId);
+          marketCache.set(tokenId, {
+            ...market,
+            outcomeForToken: otherOutcome,
+          });
           cacheTimestamps.set(tokenId, Date.now());
         }
       }
@@ -77,7 +111,7 @@ export async function fetchPolymarketByTokenId(
       // Ignore parsing errors
     }
 
-    return market;
+    return marketWithOutcome;
   } catch (error) {
     console.error(`[PolymarketAPI] Error fetching market for token ${clobTokenId}:`, error);
     return null;
@@ -89,8 +123,8 @@ export async function fetchPolymarketByTokenId(
  */
 export async function fetchPolymarketsByTokenIds(
   clobTokenIds: string[]
-): Promise<Map<string, PolymarketMarket>> {
-  const results = new Map<string, PolymarketMarket>();
+): Promise<Map<string, PolymarketMarketWithOutcome>> {
+  const results = new Map<string, PolymarketMarketWithOutcome>();
   const tokensToFetch: string[] = [];
 
   // Check cache first
@@ -138,12 +172,29 @@ export async function fetchPolymarketsByTokenIds(
 }
 
 /**
- * Get market title for a Polymarket token
- * Returns the question/title if found, null otherwise
+ * Get a formatted title for a Polymarket token
+ * Includes the outcome (Up/Down, Yes/No) and any group threshold info
+ * 
+ * Examples:
+ * - "Bitcoin Up or Down - Dec 25 (Up)"
+ * - "Will BTC reach $250,000? (↑ 250,000)"
  */
 export async function getPolymarketTitle(clobTokenId: string): Promise<string | null> {
   const market = await fetchPolymarketByTokenId(clobTokenId);
-  return market?.question || null;
+  if (!market) return null;
+  
+  let title = market.question;
+  
+  // If there's a groupItemTitle (like "↑ 250,000"), use that as the suffix
+  if (market.groupItemTitle && market.groupItemTitle !== '0') {
+    title = `${title} (${market.groupItemTitle})`;
+  } 
+  // Otherwise, if we have an outcome for this token, append it
+  else if (market.outcomeForToken) {
+    title = `${title} (${market.outcomeForToken})`;
+  }
+  
+  return title;
 }
 
 /**
@@ -168,4 +219,3 @@ export function clearPolymarketCache(): void {
 export function getPolymarketCacheStats(): { size: number } {
   return { size: marketCache.size };
 }
-
